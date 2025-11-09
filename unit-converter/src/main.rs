@@ -1,3 +1,8 @@
+use crate::config::hello;
+pub mod config;
+
+
 fn main() {
-    println!("Hello, world!");
+    hello();
 }
+
