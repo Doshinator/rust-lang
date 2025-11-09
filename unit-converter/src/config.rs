@@ -89,7 +89,7 @@ impl Config {
     pub fn build(mut args: impl Iterator<Item = String>) -> Result<Config, &'static str> {
         args.next();
         let value_unit = match args.next() {
-            Some(val) => val.parse::<f32>().map_err(|_| { "Value must be a float,"})?,
+            Some(val) => val.parse::<f32>().map_err(|_| { "Value must be a float"})?,
             None => return Err("Did not get a query string."),
         };
 
