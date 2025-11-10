@@ -13,8 +13,19 @@ impl Config {
             None => return Err("Invalid query string"),
         };
 
-        let tip_percentage: u8 = 8;
-        let number_of_people: u8 = 8;
+        let tip_percentage: u8 = match args.next() {
+            Some(tip) => tip.parse::<u8>().map_err(|_| {
+                "Value must be an integer."
+            })?,
+            None => return Err("Invalid query string."),
+        };
+
+        let number_of_people: u8 = match args.next() {
+            Some(people) => people.parse::<u8>().map_err(|_| {
+                "Value must be an integer."
+            })?,
+            None => return Err("Invalid query string."),
+        };
 
         Ok(Config {
             bill_amount,
