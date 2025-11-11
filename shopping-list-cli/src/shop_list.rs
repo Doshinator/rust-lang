@@ -1,14 +1,16 @@
-use std::{fs::{File, OpenOptions}, io::{BufRead, BufReader, ErrorKind, Write}};
+use std::{
+    fs::{File, OpenOptions},
+    io::{BufRead, BufReader, ErrorKind, Result, Write},
+};
 
 use crate::config::{Command, Config};
 
-pub fn run(config: &Config) -> std::io::Result<()> {
+pub fn run(config: &Config) -> Result<()> {
     match &config.command {
         Command::Add(item) => add_item(item)?,
         Command::Remove(index) => remove_item(*index)?,
         Command::List => show_list()?,
     };
-
     Ok(())
 }
 
@@ -23,7 +25,7 @@ fn add_item(item: &str) -> std::io::Result<()> {
     Ok(())
 }
 
-fn remove_item(index: usize) -> std::io::Result<()> {
+fn remove_item(index: usize) -> Result<()> {
     let mut lines: Vec<String> = {
         let file = match File::open("shopping_list.txt") {
             Ok(f) => f,
@@ -48,8 +50,9 @@ fn remove_item(index: usize) -> std::io::Result<()> {
 
 
     let mut file = OpenOptions::new()
-        .create(true)
+        .write(true)
         .truncate(true)
+        .create(true)
         .open("shopping_list.txt")?;
 
     for line in lines {
@@ -59,7 +62,7 @@ fn remove_item(index: usize) -> std::io::Result<()> {
     Ok(())
 }
 
-fn show_list() -> std::io::Result<()> {
+fn show_list() -> Result<()> {
     let file_handler = match File::open("shopping_list.txt") {
         Ok(f) => f,
         Err(err) if err.kind() == ErrorKind::NotFound => {

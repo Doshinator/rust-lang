@@ -1,3 +1,5 @@
-milk
-milk
 egg
+orange
+milk
+beans
+onions
