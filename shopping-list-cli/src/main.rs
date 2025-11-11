@@ -1,6 +1,6 @@
 use std::{env, process};
 
-use crate::config::Config;
+use crate::{config::Config, shop_list::run};
 
 pub mod config;
 pub mod shop_list;
@@ -11,4 +11,9 @@ fn main() {
             eprint!("{}", err);
             process::exit(1);
         });
+
+    if let Err(e) = run(&config) {
+        eprintln!("Error {}", e);
+        process::exit(1);
+    }
 }

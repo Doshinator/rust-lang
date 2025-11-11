@@ -25,7 +25,7 @@ impl Config {
                 };
                 Command::Remove(index)
             },
-            Some("List") => {
+            Some("list") => {
                 Command::List
             },
             _ => return Err("Unknown command"),
