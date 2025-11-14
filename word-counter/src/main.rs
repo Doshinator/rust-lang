@@ -1,4 +1,4 @@
-use std::{env, process};
+use std::{env, process::{self}};
 
 use crate::{config::Config, word_count::run};
 
@@ -11,5 +11,9 @@ fn main() {
             eprint!("{}", err);
             process::exit(1);
         });
-    run(&config);
+
+    if let Err(e) = run(&config) {
+        eprintln!("Application error {}", e);
+        process::exit(1);
+    }
 }
