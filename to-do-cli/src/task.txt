@@ -1,0 +1,4 @@
+[x] Buy milk
+[x] Write rust code
+Go for a walk
+Read a book

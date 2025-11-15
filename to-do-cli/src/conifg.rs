@@ -6,7 +6,7 @@ pub enum Command {
 }
 
 pub struct Config {
-    command: Command,
+    pub command: Command,
 }
 
 impl Config {

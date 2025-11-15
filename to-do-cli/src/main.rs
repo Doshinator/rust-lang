@@ -1,6 +1,6 @@
 use std::{env, process};
 
-use crate::conifg::Config;
+use crate::{conifg::Config, task::run};
 
 pub mod task;
 pub mod conifg;
@@ -11,4 +11,9 @@ fn main() {
             eprintln!("{}", e);
             process::exit(1);
         });
+
+    if let Err(e) = run(&config) {
+        eprintln!("Error running Application. {}", e);
+        process::exit(1);
+    }
 }
