@@ -3,11 +3,6 @@ use std::io::Write;
 
 use crate::conifg::{Command, Config};
 
-pub struct Task {
-    description: String,
-    status: bool,
-}
-
 pub fn run(config: &Config) -> Result<(), std::io::Error> {
     let mut lines = collect_file_lines()?;
     match &config.command {
