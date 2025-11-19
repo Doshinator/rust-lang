@@ -44,7 +44,7 @@ fn get_city_coordinates(city: &str) -> Option<(f64, f64)> {
     }
 }
 
-async fn get_weather(city: web::Path<String>) -> impl Responder {
+async fn get_weather(city: web::Path<String>) -> Result<HttpResponse> {
     let cord = match get_city_coordinates(&city) {
         Some(c) => c,
         None => {
