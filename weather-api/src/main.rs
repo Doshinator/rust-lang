@@ -69,7 +69,15 @@ async fn get_weather(city: web::Path<String>) -> Result<HttpResponse> {
         .await;
 
     match response {
-        Ok(resp) => todo!(),
+        Ok(resp) => {
+            let weather_data: OpenMetoResponse = resp.json().await.unwrap();
+            let weather_response = WeatherReponse {
+                city: city.to_string(),
+                temperature_celsius: weather_data.current.temperature_2m,
+                condition: weather_code_to_condition(weather_data.current.weather_code),
+            };
+            Ok(HttpResponse::Ok().json(weather_response))
+        },
         Err(_) => Ok(HttpResponse::InternalServerError().json(serde_json::json!({
             "error": "Failed to fetch weather data"
         }))),
@@ -83,8 +91,9 @@ async fn main() -> std::io::Result<()> {
 
     HttpServer::new(|| {
         App::new()
+        .route("/weather/{city}", web::get().to(get_weather))
     })
-    .bind(("127.0.0", 8080))?
+    .bind(("127.0.0.1", 8080))?
     .run()
     .await
 }
