@@ -1,7 +1,6 @@
 use std::sync::Mutex;
 
 use actix_web::{web, App, HttpServer, HttpResponse, Result};
-use rand::random;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -29,10 +28,26 @@ struct AppState {
     quotes: Mutex<Vec<Quote>>,
 }
 
+
+/**
+ *  Other forms of extracting data from an HTTP request
+ *  // Extract from URL path: /weather/{city}
+    async fn handler(city: web::Path<String>) { }
+
+    // Extract from query params: /search?q=rust
+    async fn handler(query: web::Query<SearchParams>) { }
+
+    // Extract form data
+    async fn handler(form: web::Form<LoginForm>) { }
+
+    // Extract raw bytes
+    async fn handler(body: web::Bytes) { }
+*/
 // POST/quotes
 async fn add_quote(
+    // web::Data and web::Json extracts data from the HTTP request and gives it to our function to use!
     state: web::Data<AppState>,
-    new_quote: web::Json<NewQuote>,
+    new_quote: web::Json<NewQuote>, // JSON -> rust struct NewQuote
 ) -> Result<HttpResponse> {
     let quote = Quote {
         id: Uuid::new_v4(),
@@ -45,7 +60,7 @@ async fn add_quote(
         .unwrap();
     quotes.push(quote.clone());
 
-    Ok(HttpResponse::Created().json(quote))
+    Ok(HttpResponse::Created().json(quote)) // Converts to JSON automatically
 }
 
 // GET/quotes/random
@@ -61,7 +76,7 @@ async fn get_randon_quote(state: web::Data<AppState>) -> Result<HttpResponse> {
     let random_index = rand::random::<usize>() % quotes.len();
     let quote = &quotes[random_index];
 
-    Ok(HttpResponse::Ok().json(quote))
+    Ok(HttpResponse::Ok().json(quote)) // Converts to JSON automatically
 }
 
 // GET/quotes
