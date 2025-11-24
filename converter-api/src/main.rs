@@ -62,6 +62,29 @@ async fn calculate(body: web::Json<CalculateRequest>) -> Result<HttpResponse> {
     }))
 }
 
-fn main() {
-    println!("Hello, world!");
+// GET/convert
+async fn convert(query: web::Query<ConvertQuery>) -> Result<HttpResponse> {
+    let converted = match (query.from.as_str(), query.to.as_str()) {
+        ("km", "miles") => query.value * 0.621371,
+        ("miles", "km") => query.value * 1.60934,
+        ("c", "f") => (query.value * 9.0 / 5.0) + 32.0,
+        ("f", "c") => (query.value - 32.0) * 5.0 / 9.0,
+        ("kg", "pounds") => query.value * 2.20462,
+        ("pounds", "kg") => query.value * 0.453592,
+        _ => return Ok(HttpResponse::BadRequest().json(serde_json::json!({
+            "error" : "Unsupported conversion. Try: km/miles, c/f, kg/pounds",
+        }))),
+    };
+
+    Ok(HttpResponse::Ok().json(ConvertQueryResponse {
+        from: query.from.clone(),
+        to: query.to.clone(),
+        original_value: query.value,
+        converted_value: converted,
+    }))
+}
+
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
+    
 }
