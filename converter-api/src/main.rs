@@ -1,7 +1,7 @@
 // POST/calculate 
 // GET /convert?from=km&to=miles&value=100
 
-use actix_web::{HttpResponse, Result, web};
+use actix_web::{App, HttpResponse, HttpServer, Result, web};
 use serde::{Deserialize, Serialize};
 
 // POST/calculate
@@ -86,5 +86,12 @@ async fn convert(query: web::Query<ConvertQuery>) -> Result<HttpResponse> {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    
+    HttpServer::new( ||
+        App::new()
+        .route("/calculate", web::post().to(calculate))
+        .route("/convert", web::get().to(convert))
+    )
+    .bind(("127.0.0.1", 8080))?
+    .run()
+    .await
 }
