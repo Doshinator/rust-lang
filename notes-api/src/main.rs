@@ -63,7 +63,7 @@ async fn list_notes(state: web::Data<AppState>) -> Result<HttpResponse> {
 }
 
 // GET /notes/{id}
-async fn get_note_id(
+async fn get_note(
     state: web::Data<AppState>,
     id: web::Path<Uuid>,
 ) -> Result<HttpResponse> {
@@ -127,5 +127,18 @@ async fn main() -> std::io::Result<()> {
         notes: Mutex::new(Vec::new())
     });
 
-    Ok(())
+    println!("Starting notes API on http://localhost:8080");
+    
+    HttpServer::new(move || {
+        App::new()
+        .app_data(app_state.clone())
+        .route("/notes", web::post().to(create_note))
+        .route("/notes", web::get().to(list_notes))
+        .route("/notes/{id}", web::get().to(get_note))
+        .route("/notes/{id}", web::put().to(update_note))
+        .route("/notes/{id}", web::delete().to(delete_note))
+    })
+    .bind(("127.0.0.1", 8080))?
+    .run()
+    .await
 }
