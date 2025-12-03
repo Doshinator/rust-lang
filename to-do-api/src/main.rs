@@ -6,11 +6,11 @@
 
 use std::sync::Mutex;
 
-use actix_web::{HttpResponse, Result, web};
+use actix_web::{App, HttpResponse, HttpServer, Result, web};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 struct Note {
     id: Uuid,
     title: String,
@@ -28,12 +28,7 @@ struct CreateNoteRequest {
 struct UpdateNoteRequest {
     title: Option<String>,
     description: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-struct NoteResponse {
-    title: String,
-    description: String,
+    is_complete: Option<bool>
 }
 
 async fn create_note(
@@ -51,9 +46,9 @@ async fn create_note(
         is_complete: false,
     };
 
-    notes.push(note);
+    notes.push(note.clone());
 
-    Ok(HttpResponse::Created().finish())
+    Ok(HttpResponse::Created().json(note))
 }
 
 async fn list_notes(state: web::Data<AppState>) -> Result<HttpResponse>{
@@ -94,6 +89,10 @@ async fn update_todo(
                 note.description = description.clone();
             }
 
+            if let Some(complete) = body.is_complete {
+                note.is_complete = complete;
+            }
+
             Ok(HttpResponse::Ok().json(note))
         },
         None => Ok(HttpResponse::NotFound().json(serde_json::json!({
@@ -120,12 +119,28 @@ async fn delete_todo(
     }
 }
 
-
 struct AppState {
     notes : Mutex<Vec<Note>>,
 }
 
+#[tokio::main]
+async fn main() -> std::io::Result<()> {
+    let app_state = web::Data::new(
+        AppState { 
+            notes: Mutex::new(Vec::new())
+        }
+    );
 
-fn main() {
-    println!("Hello, world!");
+    HttpServer::new(move || {
+        App::new()
+            .app_data(app_state.clone())
+            .route("/todos", web::post().to(create_note))
+            .route("/todos", web::get().to(list_notes))
+            .route("/todos/{id}", web::get().to(get_note))
+            .route("/todos/{id}", web::put().to(update_todo))
+            .route("/todos/{id}", web::delete().to(delete_todo))
+    })
+    .bind(("127.0.0.1", 8080))?
+    .run()
+    .await
 }
