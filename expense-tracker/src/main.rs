@@ -169,6 +169,29 @@ async fn filter_by_category(
     Ok(HttpResponse::Ok().json(expenses))
 }
 
+// GET TOTAL SPENDING: GET /expenses/total?category=groceries (category is optional)
+async fn get_total_spending(
+    state: web::Data<AppState>,
+    query: web::Query<CategoryQuery>,
+) -> Result<HttpResponse> {
+    todo!()
+}
+
+// UPDATE: PUT /expenses/{id}
+async fn update_expense(
+    state: web::Data<AppState>,
+    id: web::Path<Uuid>,
+) -> Result<HttpResponse> {
+    todo!()
+}
+
+// DELETE /expenses/{id}
+async fn delete_expense(
+    state: web::Data<AppState>,
+    id: web::Path<Uuid>
+) -> Result<HttpResponse> {
+    todo!()
+}
 fn main() {
     print!("");
 }
