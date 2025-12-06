@@ -119,6 +119,38 @@ async fn get_expense(
     }
 }
 
+// FILTER BY DATE RANGE: GET /expenses/by-date?start=2024-01-01&end=2025-01-01
+async fn get_expense_by_date(
+    state: web::Data<AppState>,
+    query: web::Query<DateRangeQuery>,
+) -> Result<HttpResponse> {
+    let start = query.start.as_deref().unwrap_or("1900-01-01");
+    let end = query.end.as_deref().unwrap_or("2025-01-01");
+
+    let expenses = sqlx::query_as::<_, Expense>(
+        "SELECT * FROM expenses WHERE date >= $1 AND date <= $2 ORDER BY date DESC"
+    )
+    .bind(start)
+    .bind(end)
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| {
+        eprintln!("Database error {}", e);
+        actix_web::error::ErrorInternalServerError("Failed to fetch expenses")
+    })?;
+
+    Ok(HttpResponse::Ok().json(expenses))
+}
+
+// FILTER BY CATEGORY GET /expenses/by-category?category=groceries
+async fn filter_by_category(
+    state: web::Data<AppState>,
+    query: web::Query<CategoryQuery>,
+) -> Result<HttpResponse> {
+
+    Ok(HttpResponse::Ok().json(expenses))
+}
+
 fn main() {
     print!("");
 }
