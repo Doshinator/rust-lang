@@ -147,6 +147,24 @@ async fn filter_by_category(
     state: web::Data<AppState>,
     query: web::Query<CategoryQuery>,
 ) -> Result<HttpResponse> {
+    let category = match &query.category {
+        Some(c) => c,
+        None => return Ok(HttpResponse::BadRequest().json(serde_json::json!({
+            "error" : "category query patameter is required"
+        }))),
+    };
+
+
+    let expenses = sqlx::query_as::<_, Expense>(
+        "SELECT * FROM expenses WHERE category = $1 ORDER BY date DESC"
+    )
+    .bind(&category)
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| {
+        eprintln!("Database error {}", e);
+        actix_web::error::ErrorInternalServerError("Failed to fetch expenses")
+    })?;
 
     Ok(HttpResponse::Ok().json(expenses))
 }
