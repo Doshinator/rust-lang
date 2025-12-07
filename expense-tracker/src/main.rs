@@ -174,7 +174,41 @@ async fn get_total_spending(
     state: web::Data<AppState>,
     query: web::Query<CategoryQuery>,
 ) -> Result<HttpResponse> {
-    todo!()
+    let total: f64 = match &query.category {
+        Some(category) => {
+            let result: (Option<f64>, ) = sqlx::query_as(
+                "SELECT SUM(category) FROM expenses WHERE category = $1"
+            )
+            .bind(category)
+            .fetch_one(&state.db)
+            .await
+            .map_err(|e| {
+                eprintln!("Database error {}", e);
+                actix_web::error::ErrorInternalServerError("Failed to calculate total")
+            })?;
+
+            result.0.unwrap_or(0.0)
+        },
+        None => {
+            let result: (Option<f64>, ) = sqlx::query_as(
+                "SELECT SUM(amount) FROM expenses"
+            )
+            .fetch_one(&state.db)
+            .await
+            .map_err(|e| {
+                eprintln!("Database error {}", e);
+                actix_web::error::ErrorInternalServerError("Failed to calculate total")
+            })?;
+            
+            result.0.unwrap_or(0.0)
+
+        },
+    };
+
+    Ok(HttpResponse::Ok().json(serde_json::json!({
+        "total" : total,
+        "category" : query.category
+    })))
 }
 
 // UPDATE: PUT /expenses/{id}
