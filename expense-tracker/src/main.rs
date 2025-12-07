@@ -55,13 +55,13 @@ async fn create_expense(
     let id = Uuid::new_v4();
 
     sqlx::query(
-        "INSERT INTO expenses (id, amount, category, description, date) VALUES ($1, $2, $3, $5, $5)"
+        "INSERT INTO expenses (id, amount, category, description, date) VALUES ($1, $2, $3, $4, $5)"
     )
         .bind(id)
-        .bind(&body.amount)
+        .bind(body.amount)
         .bind(&body.category)
         .bind(&body.description)
-        .bind(&body.date)
+        .bind(parsed_date)
         .execute(&state.db)
         .await
         .map_err(|e| {
@@ -107,7 +107,7 @@ async fn get_expense(
     .fetch_optional(&state.db)
     .await
     .map_err(|e| {
-        eprintln!("Database error", e);
+        eprintln!("Database error {}", e);
         actix_web::error::ErrorInternalServerError(format!("Failed to fetch expense {}", *id))
     })?;
 
@@ -120,7 +120,7 @@ async fn get_expense(
 }
 
 // FILTER BY DATE RANGE: GET /expenses/by-date?start=2024-01-01&end=2025-01-01
-async fn get_expense_by_date(
+async fn get_expenses_by_date(
     state: web::Data<AppState>,
     query: web::Query<DateRangeQuery>,
 ) -> Result<HttpResponse> {
@@ -143,7 +143,7 @@ async fn get_expense_by_date(
 }
 
 // FILTER BY CATEGORY GET /expenses/by-category?category=groceries
-async fn filter_by_category(
+async fn get_expenses_by_category(
     state: web::Data<AppState>,
     query: web::Query<CategoryQuery>,
 ) -> Result<HttpResponse> {
@@ -177,7 +177,7 @@ async fn get_total_spending(
     let total: f64 = match &query.category {
         Some(category) => {
             let result: (Option<f64>, ) = sqlx::query_as(
-                "SELECT SUM(category) FROM expenses WHERE category = $1"
+                "SELECT SUM(amount) FROM expenses WHERE category = $1"
             )
             .bind(category)
             .fetch_one(&state.db)
@@ -234,10 +234,7 @@ async fn update_expense(
             "error": "Expense not found"
         }))),
     };
-    //     amount: Option<f64>,
-    //     category: Option<String>,
-    //     description: Option<String>,
-    //     date: Option<String>,
+
     if let Some(amount) = body.amount {
         expense.amount = amount;
     }
@@ -298,6 +295,31 @@ async fn delete_expense(
         })))
     }
 }
-fn main() {
-    print!("");
+
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
+    let database_url = "postgres://postgres:postgres@localhost/expenses";
+    let pool = PgPool::connect(database_url)
+        .await
+        .expect("Failed connecting to database");
+
+    let app_state = web::Data::new(AppState { db: pool });
+
+    println!("💰 Starting Expense Tracker API with Postgres on http://localhost:8080");
+
+    HttpServer::new(move || {
+        App::new()
+        .app_data(app_state.clone())
+        .route("/expenses", web::post().to(create_expense))
+        .route("/expenses", web::get().to(list_expenses))
+        .route("/expenses/by-date", web::get().to(get_expenses_by_date))
+        .route("/expenses/by-category", web::get().to(get_expenses_by_category))
+        .route("/expenses/total", web::get().to(get_total_spending))
+        .route("/expenses/{id}", web::get().to(get_expense))
+        .route("/expenses/{id}", web::put().to(update_expense))
+        .route("/expenses/{id}", web::delete().to(delete_expense))
+    })
+    .bind(("127.0.0.1", 8080))?
+    .run()
+    .await
 }
