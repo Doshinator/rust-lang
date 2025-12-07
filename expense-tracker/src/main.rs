@@ -215,8 +215,62 @@ async fn get_total_spending(
 async fn update_expense(
     state: web::Data<AppState>,
     id: web::Path<Uuid>,
+    body: web::Json<UpdateExpenseRequest>,
 ) -> Result<HttpResponse> {
-    todo!()
+    let existing = sqlx::query_as::<_, Expense>(
+        "SELECT * FROM expenses WHERE id = $1"
+    )
+    .bind(*id)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| {
+        eprintln!("Database error {}", e);
+        actix_web::error::ErrorInternalServerError("Failed to fetch expense")
+    })?;
+    
+    let mut expense = match existing {
+        Some(expense) => expense,
+        None => return Ok(HttpResponse::NotFound().json(serde_json::json!({
+            "error": "Expense not found"
+        }))),
+    };
+    //     amount: Option<f64>,
+    //     category: Option<String>,
+    //     description: Option<String>,
+    //     date: Option<String>,
+    if let Some(amount) = body.amount {
+        expense.amount = amount;
+    }
+
+    if let Some(category) = &body.category {
+        expense.category = category.clone();
+    }
+
+    if let Some(description) = &body.description {
+        expense.description = description.clone();
+    }
+
+    if let Some(date) = &body.date {
+        expense.date = NaiveDate::parse_from_str(date, "%Y-%m-%d")
+            .map_err(|_| actix_web::error::ErrorBadRequest("Invalid date format. Use YYYY-MM-DD"))?;
+    };
+
+    sqlx::query(
+        "UPDATE expenses SET AMOUNT = $1, category = $2, description = $3, date = $4 WHERE id = $5"
+    )
+    .bind(expense.amount)
+    .bind(&expense.category)
+    .bind(&expense.description)
+    .bind(expense.date)
+    .bind(*id)
+    .execute(&state.db)
+    .await
+    .map_err(|e| {
+        eprintln!("Database error {}", e);
+        actix_web::error::ErrorInternalServerError("Failed to update expense")
+    })?;
+ 
+    Ok(HttpResponse::Ok().json(expense))
 }
 
 // DELETE /expenses/{id}
