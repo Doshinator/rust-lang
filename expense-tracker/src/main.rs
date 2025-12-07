@@ -278,7 +278,25 @@ async fn delete_expense(
     state: web::Data<AppState>,
     id: web::Path<Uuid>
 ) -> Result<HttpResponse> {
-    todo!()
+    let result = sqlx::query(
+        "DELETE FROM expenses WHERE id = $1"
+    )
+    .bind(*id)
+    .execute(&state.db)
+    .await
+    .map_err(|e| {
+        eprintln!("Database error {}", e);
+        actix_web::error::ErrorInternalServerError("Failed to delete expense")
+    })?;
+
+    if result.rows_affected() > 0 {
+        Ok(HttpResponse::NoContent().finish())
+    }
+    else {
+        Ok(HttpResponse::NotFound().json(serde_json::json!({
+            "error" : "Expense not found"
+        })))
+    }
 }
 fn main() {
     print!("");
