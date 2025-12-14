@@ -38,6 +38,8 @@ struct AppState {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    // export DATABASE_URL="postgres://postgres:postgres@localhost/game_account_db"
+    // psql -h localhost -p 5432 -U postgres -d game_account_db
     let db_url = "postgres://postgres:postgres@localhost/game_account_db";
     let pool = PgPool::connect(db_url)
         .await
