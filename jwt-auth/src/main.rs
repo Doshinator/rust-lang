@@ -3,7 +3,7 @@
 // PUT /accounts/{id} - Update account
 // DELETE /accounts/{id} - Delete account
 
-use actix_web::{App, HttpResponse, HttpServer, Result, get, post, web};
+use actix_web::{App, HttpResponse, HttpServer, Result, delete, get, post, put, web};
 use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, prelude::FromRow};
 use uuid::Uuid;
@@ -26,7 +26,7 @@ struct CreateGameAccountRequest {
 }
 
 #[derive(Debug, Deserialize)]
-struct UpdateGameAccount {
+struct UpdateGameAccountRequest {
     username: Option<String>,
     platform: Option<String>,
     level: Option<i32>,
@@ -95,14 +95,104 @@ async fn get_account(
         "SELECT * FROM game_accounts where id = $1"
     )
     .bind(*id)
-    .fetch_one(&state.db)
+    .fetch_optional(&state.db)
     .await
     .map_err(|e| {
         eprintln!("Database error {}", e);
         actix_web::error::ErrorInternalServerError("Failed to fetch game account")
     })?;
 
+    match account {
+        Some(account) => Ok(HttpResponse::Ok().json(account)),
+        None => Ok(HttpResponse::NotFound().json(serde_json::json!({
+            "Error" : "Account not found"
+        })))
+    }
+}
+
+#[put("/accounts/{id}")]
+async fn update_account(
+    state: web::Data<AppState>,
+    id: web::Path<Uuid>,
+    body: web::Json<UpdateGameAccountRequest>
+) -> Result<HttpResponse> {
+    let account = sqlx::query_as::<_, GameAccount>(
+        "SELECT * FROM game_accounts where id = $1"
+    )
+    .bind(*id)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| {
+        eprintln!("Database error {}", e);
+        actix_web::error::ErrorInternalServerError("Failed to fetch game account")
+    })?;
+
+    let mut account = match account {
+        Some(a) => a,
+        None => return Ok(HttpResponse::NotFound().json(serde_json::json!({
+            "error" : "game account not found"
+        }))),
+    };
+
+    if let Some(username) = &body.username {
+        account.username = username.clone();
+    }
+
+    if let Some(platform) = &body.platform {
+        account.platform = platform.clone();
+    }
+
+    if let Some(lv) = body.level {
+        account.level = lv;
+    }
+
+    if let Some(hours) = body.total_hours_played {
+        account.total_hours_played = hours;
+    }
+
+    sqlx::query(
+        "UPDATE game_accounts SET username = $1, platform = $2, level = $3, total_hours_played = $4
+        WHERE id = $5"
+    )
+    .bind(&account.username)
+    .bind(&account.platform)
+    .bind(account.level)
+    .bind(account.total_hours_played)
+    .bind(*id)
+    .execute(&state.db)
+    .await
+    .map_err(|e| {
+        eprintln!("Database error {}", e);
+        actix_web::error::ErrorInternalServerError("Failed to update game account")
+    })?;
+
     Ok(HttpResponse::Ok().json(account))
+}
+
+#[delete("/accounts/{id}")]
+async fn delete_account(
+    state: web::Data<AppState>,
+    id: web::Path<Uuid>,
+) -> Result<HttpResponse> {
+    let result = sqlx::query(
+        "DELETE FROM game_accounts where id = $1"
+    )
+    .bind(*id)
+    .execute(&state.db)
+    .await
+    .map_err(|e| {
+        eprintln!("Database error {}", e);
+        actix_web::error::ErrorInternalServerError("Failed to delete game account")
+    })?;
+
+    if result.rows_affected() > 0 {
+        Ok(HttpResponse::NoContent().finish())
+    }
+    else {
+        Ok(HttpResponse::NotFound().json(serde_json::json!({
+            "error" : "game account not found"
+        })))
+    }
 }
 
 #[actix_web::main]
@@ -119,7 +209,11 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         App::new()
         .app_data(app_state.clone())
-        
+        .service(create_account)
+        .service(list_accounts)
+        .service(get_account)
+        .service(update_account)
+        .service(delete_account)
     })
     .bind(("127.0.0.1", 8080))?
     .run()
