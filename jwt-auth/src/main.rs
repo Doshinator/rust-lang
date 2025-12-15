@@ -4,6 +4,9 @@
 // DELETE /accounts/{id} - Delete account
 
 use actix_web::{App, HttpResponse, HttpServer, Result, delete, get, post, put, web};
+use bcrypt::{DEFAULT_COST, hash, verify};
+use chrono::{DateTime, Utc};
+use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, prelude::FromRow};
 use uuid::Uuid;
@@ -11,6 +14,7 @@ use uuid::Uuid;
 #[derive(Debug, Serialize, Deserialize, FromRow)]
 struct GameAccount {
     id: Uuid,
+    user_id: Uuid,
     username: String,
     platform: String,
     level: i32,
@@ -195,6 +199,86 @@ async fn delete_account(
     }
 }
 
+// --------------- Auth request 
+#[derive(Debug, Serialize,FromRow)]
+struct Users {
+    id: Uuid,
+    email: String,
+    #[serde(skip_serializing)]
+    password_hash: String,
+    created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RegisterRequest {
+    email: String,
+    password: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct LoginRequest {
+    email: String,
+    password: String,
+}
+
+#[derive(Debug, Serialize)]
+struct AuthReponse {
+    token: String,
+    user: UserResponse,
+}
+
+#[derive(Debug, Serialize)]
+struct UserResponse {
+    id: Uuid,
+    email: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Claims {
+    sub: String,
+    exp: usize,
+}
+
+fn hash_password(password: &str) -> Result<String, bcrypt::BcryptError> {
+    hash(password, DEFAULT_COST)
+}
+
+fn verfiy_hash(password: &str, hash: &str) -> Result<bool, bcrypt::BcryptError> {
+    verify(password, hash)
+}
+
+fn create_token(user_id: Uuid) -> Result<String, jsonwebtoken::errors::Error> {
+    let expiration = Utc::now()
+        .checked_add_signed(chrono::Duration::hours(24))
+        .expect("valid timestamp")
+        .timestamp() as usize;
+    
+    let claims = Claims {
+        sub: user_id.to_string(),
+        exp: expiration,
+    };
+
+    encode(
+        &Header::default(), 
+        &claims, 
+        &EncodingKey::from_secret(JWT_SECRET)
+    )
+}
+
+fn verify_token(token: &str) -> Result<Uuid, jsonwebtoken::errors::Error> {
+    let token_data = decode::<Claims>(
+        token,
+        &DecodingKey::from_secret(JWT_SECRET),
+        &Validation::default(),
+    )?;
+
+    Uuid::parse_str(&token_data.claims.sub)
+        .map_err(|_| {
+            jsonwebtoken::errors::ErrorKind::InvalidSubject.into()
+        })
+}
+
+const JWT_SECRET: &[u8] = b"your-secret-key-change-this-in-production";
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     // export DATABASE_URL="postgres://postgres:postgres@localhost/game_account_db"
