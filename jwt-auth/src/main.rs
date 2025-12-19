@@ -3,7 +3,10 @@
 // PUT /accounts/{id} - Update account
 // DELETE /accounts/{id} - Delete account
 
-use actix_web::{App, HttpResponse, HttpServer, Result, delete, get, post, put, web};
+use actix_web::{App, HttpResponse, HttpServer, Result, delete, error::ErrorInternalServerError, get, post, put, web};
+use bcrypt::{DEFAULT_COST, hash, verify};
+use chrono::{DateTime, Utc};
+use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, prelude::FromRow};
 use uuid::Uuid;
@@ -11,6 +14,7 @@ use uuid::Uuid;
 #[derive(Debug, Serialize, Deserialize, FromRow)]
 struct GameAccount {
     id: Uuid,
+    user_id: Uuid,
     username: String,
     platform: String,
     level: i32,
@@ -195,6 +199,155 @@ async fn delete_account(
     }
 }
 
+// --------------- Auth request 
+#[derive(Debug, Serialize,FromRow)]
+struct User {
+    id: Uuid,
+    email: String,
+    #[serde(skip_serializing)]
+    password_hash: String,
+    created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RegisterRequest {
+    email: String,
+    password: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct LoginRequest {
+    email: String,
+    password: String,
+}
+
+#[derive(Debug, Serialize)]
+struct AuthReponse {
+    token: String,
+    user: UserResponse,
+}
+
+#[derive(Debug, Serialize)]
+struct UserResponse {
+    id: Uuid,
+    email: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Claims {
+    sub: String,
+    exp: usize,
+}
+
+fn hash_password(password: &str) -> Result<String, bcrypt::BcryptError> {
+    hash(password, DEFAULT_COST)
+}
+
+fn verify_password(password: &str, hash: &str) -> Result<bool, bcrypt::BcryptError> {
+    verify(password, hash)
+}
+
+fn create_token(user_id: Uuid) -> Result<String, jsonwebtoken::errors::Error> {
+    let expiration = Utc::now()
+        .checked_add_signed(chrono::Duration::hours(24))
+        .expect("valid timestamp")
+        .timestamp() as usize;
+    
+    let claims = Claims {
+        sub: user_id.to_string(),
+        exp: expiration,
+    };
+
+    encode(
+        &Header::default(), 
+        &claims, 
+        &EncodingKey::from_secret(JWT_SECRET)
+    )
+}
+
+fn verify_token(token: &str) -> Result<Uuid, jsonwebtoken::errors::Error> {
+    let token_data = decode::<Claims>(
+        token,
+        &DecodingKey::from_secret(JWT_SECRET),
+        &Validation::default(),
+    )?;
+
+    Uuid::parse_str(&token_data.claims.sub)
+        .map_err(|_| {
+            jsonwebtoken::errors::ErrorKind::InvalidSubject.into()
+        })
+}
+
+#[post("/auth/register")]
+async fn register(
+    state: web::Data<AppState>,
+    body: web::Json<RegisterRequest>,
+) -> Result<HttpResponse> {
+    let existing: Option<User> = sqlx::query_as(
+        "SELECT * FROM users WHERE email = $1"
+    )
+    .bind(&body.email)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| {
+        eprintln!("Database error: {}", e);
+        actix_web::error::ErrorInternalServerError("Failed to connect to database")
+    })?;
+
+    if existing.is_some() {
+        return Ok(HttpResponse::BadRequest().json(serde_json::json!({
+            "error" : "Email already registered"
+        })));
+    }
+
+    let hashed_password = hash_password(&body.password)
+        .map_err(|e| {
+            eprint!("Hash failed");
+            actix_web::error::ErrorInternalServerError("Failed to hash password")
+        })?;
+    
+    let user_id = Uuid::new_v4();
+
+    sqlx::query(
+        "INSERT INTO users (id, email, password_hash, created_at)
+        VALUES ($1, $2, $3, NOW())"
+    )
+    .bind(user_id)
+    .bind(&body.email)
+    .bind(&hashed_password)
+    .execute(&state.db)
+    .await
+    .map_err(|e| {
+        eprint!("Database error {}", e);
+        actix_web::error::ErrorInternalServerError("Failed to create user")
+    })?;
+    
+    // generate token
+    let token = create_token(user_id)
+        .map_err(|e| {
+            eprintln!("Token error: {}", e);
+            actix_web::error::ErrorInternalServerError("Failed to generate token")
+        })?;
+    
+    Ok(HttpResponse::Created().json(AuthReponse {
+        token: token,
+        user: UserResponse { 
+            id: user_id,
+            email: body.email.clone(),
+        },
+    }))
+}
+
+
+#[post("/auth/login")]
+async fn login(
+    state: web::Data<AppState>,
+    body: web::Json<LoginRequest>
+) -> Result<HttpResponse> {
+    todo!()
+}
+
+const JWT_SECRET: &[u8] = b"your-secret-key-change-this-in-production";
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     // export DATABASE_URL="postgres://postgres:postgres@localhost/game_account_db"
@@ -214,6 +367,9 @@ async fn main() -> std::io::Result<()> {
         .service(get_account)
         .service(update_account)
         .service(delete_account)
+        // auth route public
+        .service(register)
+        .service(login)
     })
     .bind(("127.0.0.1", 8080))?
     .run()
