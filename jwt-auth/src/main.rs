@@ -1,9 +1,4 @@
-// POST /accounts - Add game account
-// GET /accounts - List all accounts
-// PUT /accounts/{id} - Update account
-// DELETE /accounts/{id} - Delete account
-
-use actix_web::{App, HttpResponse, HttpServer, Result, delete, error::ErrorInternalServerError, get, post, put, web};
+use actix_web::{App, HttpResponse, HttpServer, Result, delete, get, post, put, web};
 use bcrypt::{DEFAULT_COST, hash, verify};
 use chrono::{DateTime, Utc};
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
@@ -344,7 +339,49 @@ async fn login(
     state: web::Data<AppState>,
     body: web::Json<LoginRequest>
 ) -> Result<HttpResponse> {
-    todo!()
+    let existing: Option<User> = sqlx::query_as(
+        "SELECT * FROM users WHERE email = $1"
+    )
+    .bind(&body.email)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| {
+        eprintln!("Database error: {}", e);
+        actix_web::error::ErrorInternalServerError("Database error")
+    })?;
+
+    let user = match existing {
+        Some(u) => u,
+        None => return Ok(HttpResponse::Unauthorized().json(serde_json::json!({
+            "error": "Invalid email or password"
+        }))),
+    };
+
+    let is_valid = verify_password(&body.password, &user.password_hash)
+        .map_err(|e| {
+            eprintln!("Verify error: {}", e);
+            actix_web::error::ErrorInternalServerError("Failed to verify password")
+        })?;
+    
+    if !is_valid {
+        return Ok(HttpResponse::Unauthorized().json(serde_json::json!({
+            "error" : "Invalid email or password"
+        })));
+    }
+
+    let token = create_token(user.id)
+        .map_err(|e| {
+            eprintln!("Token error: {}", e);
+            actix_web::error::ErrorInternalServerError("Failed to generate token")
+        })?;
+
+    Ok(HttpResponse::Ok().json(AuthReponse {
+        token,
+        user: UserResponse {
+            id: user.id,
+            email: user.email,
+        }
+    }))
 }
 
 const JWT_SECRET: &[u8] = b"your-secret-key-change-this-in-production";
@@ -362,6 +399,7 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         App::new()
         .app_data(app_state.clone())
+        // Account routes (protect these next in feature)
         .service(create_account)
         .service(list_accounts)
         .service(get_account)
@@ -370,6 +408,7 @@ async fn main() -> std::io::Result<()> {
         // auth route public
         .service(register)
         .service(login)
+        
     })
     .bind(("127.0.0.1", 8080))?
     .run()
