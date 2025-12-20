@@ -1,5 +1,6 @@
 mod models;
 mod handlers;
+mod middleware;
 mod utils;
 
 use actix_web::{App, HttpServer, web};

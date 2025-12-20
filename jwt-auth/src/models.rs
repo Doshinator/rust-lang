@@ -1,3 +1,5 @@
+use actix_web::{FromRequest, HttpMessage};
+use std::future::{ready, Ready};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::prelude::FromRow;
@@ -69,6 +71,30 @@ pub struct UserResponse {
 pub struct Claims {
     pub sub: String,
     pub exp: usize,
+}
+
+// This struct will be injected into handlers after middleware verifies token
+#[derive(Debug, Clone)]
+pub struct AuthenticatedUser {
+    pub user_id: Uuid,
+}
+
+impl FromRequest for AuthenticatedUser {
+    type Error = actix_web::Error;
+    type Future = Ready<Result<Self, Self::Error>>;
+
+    fn from_request(
+        req: &actix_web::HttpRequest, 
+        _: &mut actix_web::dev::Payload
+    ) -> Self::Future {
+        let result = req
+            .extensions()
+            .get::<AuthenticatedUser>()
+            .cloned()
+            .ok_or_else(|| actix_web::error::ErrorUnauthorized("Not authenticated"));
+        
+        ready(result)
+    }
 }
 
 // ============= App State =============
